@@ -1,0 +1,9 @@
+node_modules
+dist
+coverage
+reports
+.scannerwork
+.git
+.gitignore
+.env
+prisma/migrations
