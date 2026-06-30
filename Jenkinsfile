@@ -34,7 +34,7 @@ pipeline {
 
         stage('Unit tests') {
             steps {
-                sh 'npm test -- --outputFile.junit=reports/junit-unit.xml'
+                sh 'npm run test:coverage -- --outputFile.junit=reports/junit-unit.xml'
             }
             post {
                 always {
@@ -60,7 +60,8 @@ pipeline {
                     sh '''
                         sonar-scanner \
                         -Dsonar.host.url=$SONAR_HOST_URL \
-                        -Dsonar.login=$SONAR_TOKEN
+                        -Dsonar.login=$SONAR_TOKEN \
+                        -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info
                     '''
                 }
             }
@@ -79,7 +80,7 @@ pipeline {
                         def analysisId = ''
                         while (taskStatus != 'SUCCESS') {
                             def taskResponse = sh(
-                                script: "curl -s -u ${SONAR_TOKEN}: '${ceTaskUrl}'",
+                                script: "curl -s -u \$SONAR_TOKEN: '${ceTaskUrl}'",
                                 returnStdout: true
                             ).trim()
 
@@ -102,7 +103,7 @@ pipeline {
                         }
 
                         def qgResponse = sh(
-                            script: "curl -s -u ${SONAR_TOKEN}: '${SONAR_HOST_URL}/api/qualitygates/project_status?analysisId=${analysisId}'",
+                            script: "curl -s -u \$SONAR_TOKEN: '${SONAR_HOST_URL}/api/qualitygates/project_status?analysisId=${analysisId}'",
                             returnStdout: true
                         ).trim()
 
