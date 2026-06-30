@@ -130,20 +130,22 @@ pipeline {
         stage('Trivy scan') {
             steps {
                 sh '''
-                    echo "=== Rapport lisible (console) ==="
-                    trivy image --severity HIGH,CRITICAL --format table $DOCKER_IMAGE:$IMAGE_TAG || true
+                    trivy image \
+                        --severity HIGH,CRITICAL \
+                        --format table \
+                        --output trivy-report.txt \
+                        $DOCKER_IMAGE:$IMAGE_TAG || true
 
-                    echo "=== Génération du rapport JSON (archivage) ==="
-                    trivy image --severity HIGH,CRITICAL --format json -o trivy-report.json $DOCKER_IMAGE:$IMAGE_TAG || true
-
-                    VULN_COUNT=$(grep -o '"Severity": *"\(HIGH\|CRITICAL\)"' trivy-report.json | wc -l)
-                    echo "Nombre de vulnérabilités HIGH/CRITICAL : $VULN_COUNT"
-                    echo "Pipeline poursuivie malgré les vulnérabilités détectées (blocage désactivé)."
+                    trivy image \
+                        --severity HIGH,CRITICAL \
+                        --format json \
+                        --output trivy-report.json \
+                        $DOCKER_IMAGE:$IMAGE_TAG || true
                 '''
             }
             post {
                 always {
-                    archiveArtifacts artifacts: 'trivy-report.json', fingerprint: true, allowEmptyArchive: true
+                    archiveArtifacts artifacts: 'trivy-report.*', fingerprint: true
                 }
             }
         }
