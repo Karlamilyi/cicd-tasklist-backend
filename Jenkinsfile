@@ -68,8 +68,46 @@ pipeline {
 
         stage('Quality Gate') {
             steps {
-                timeout(time: 5, unit: 'MINUTES') {
-                    waitForQualityGate abortPipeline: true
+                script {
+                    def reportFile = '.scannerwork/report-task.txt'
+                    def props = readProperties file: reportFile
+                    def ceTaskUrl = props['ceTaskUrl']
+
+                    timeout(time: 5, unit: 'MINUTES') {
+                        def taskStatus = ''
+                        while (taskStatus != 'SUCCESS') {
+                            def taskResponse = bat(
+                                script: "curl -s -u %SONAR_TOKEN%: ${ceTaskUrl}",
+                                returnStdout: true
+                            ).trim()
+                            def taskJson = readJSON text: taskResponse
+                            taskStatus = taskJson.task.status
+
+                            if (taskStatus == 'FAILED' || taskStatus == 'CANCELED') {
+                                error "L'analyse SonarQube a échoué (status: ${taskStatus})"
+                            }
+                            if (taskStatus != 'SUCCESS') {
+                                sleep(time: 10, unit: 'SECONDS')
+                            }
+                        }
+
+                        def analysisId = readJSON(text: bat(
+                            script: "curl -s -u %SONAR_TOKEN%: ${ceTaskUrl}",
+                            returnStdout: true
+                        ).trim()).task.analysisId
+
+                        def qgResponse = bat(
+                            script: "curl -s -u %SONAR_TOKEN%: ${SONAR_HOST_URL}/api/qualitygates/project_status?analysisId=${analysisId}",
+                            returnStdout: true
+                        ).trim()
+                        def qgJson = readJSON text: qgResponse
+                        def qgStatus = qgJson.projectStatus.status
+
+                        echo "Quality Gate status: ${qgStatus}"
+                        if (qgStatus != 'OK') {
+                            error "Quality Gate SonarQube en échec (status: ${qgStatus})"
+                        }
+                    }
                 }
             }
         }
