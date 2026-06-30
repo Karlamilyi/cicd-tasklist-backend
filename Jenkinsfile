@@ -22,19 +22,19 @@ pipeline {
 
         stage('Install dependencies') {
             steps {
-                bat 'npm ci'
+                sh 'npm ci'
             }
         }
 
         stage('Generate Prisma client') {
             steps {
-                bat 'npx prisma generate'
+                sh 'npx prisma generate'
             }
         }
 
         stage('Unit tests') {
             steps {
-                bat 'npm test -- --outputFile.junit=reports/junit-unit.xml'
+                sh 'npm test -- --outputFile.junit=reports/junit-unit.xml'
             }
             post {
                 always {
@@ -45,7 +45,7 @@ pipeline {
 
         stage('E2E tests') {
             steps {
-                bat 'npm run test:e2e -- --outputFile.junit=reports/junit-e2e.xml'
+                sh 'npm run test:e2e -- --outputFile.junit=reports/junit-e2e.xml'
             }
             post {
                 always {
@@ -57,11 +57,11 @@ pipeline {
         stage('SonarQube analysis') {
             steps {
                 withSonarQubeEnv('SonarQube') {
-                    bat """
-                        sonar-scanner ^
-                        -Dsonar.host.url=%SONAR_HOST_URL% ^
-                        -Dsonar.login=%SONAR_TOKEN%
-                    """
+                    sh '''
+                        sonar-scanner \
+                        -Dsonar.host.url=$SONAR_HOST_URL \
+                        -Dsonar.login=$SONAR_TOKEN
+                    '''
                 }
             }
         }
@@ -76,8 +76,8 @@ pipeline {
                     timeout(time: 5, unit: 'MINUTES') {
                         def taskStatus = ''
                         while (taskStatus != 'SUCCESS') {
-                            def taskResponse = bat(
-                                script: "curl -s -u %SONAR_TOKEN%: ${ceTaskUrl}",
+                            def taskResponse = sh(
+                                script: "curl -s -u ${SONAR_TOKEN}: ${ceTaskUrl}",
                                 returnStdout: true
                             ).trim()
                             def taskJson = readJSON text: taskResponse
@@ -91,13 +91,13 @@ pipeline {
                             }
                         }
 
-                        def analysisId = readJSON(text: bat(
-                            script: "curl -s -u %SONAR_TOKEN%: ${ceTaskUrl}",
+                        def analysisId = readJSON(text: sh(
+                            script: "curl -s -u ${SONAR_TOKEN}: ${ceTaskUrl}",
                             returnStdout: true
                         ).trim()).task.analysisId
 
-                        def qgResponse = bat(
-                            script: "curl -s -u %SONAR_TOKEN%: ${SONAR_HOST_URL}/api/qualitygates/project_status?analysisId=${analysisId}",
+                        def qgResponse = sh(
+                            script: "curl -s -u ${SONAR_TOKEN}: ${SONAR_HOST_URL}/api/qualitygates/project_status?analysisId=${analysisId}",
                             returnStdout: true
                         ).trim()
                         def qgJson = readJSON text: qgResponse
@@ -114,16 +114,16 @@ pipeline {
 
         stage('Docker build') {
             steps {
-                bat "docker build -t %DOCKER_IMAGE%:%IMAGE_TAG% -t %DOCKER_IMAGE%:latest ."
+                sh 'docker build -t $DOCKER_IMAGE:$IMAGE_TAG -t $DOCKER_IMAGE:latest .'
             }
         }
 
         stage('Trivy scan') {
             steps {
-                bat """
-                    trivy image --severity HIGH,CRITICAL --exit-code 1 ^
-                    --format json -o trivy-report.json %DOCKER_IMAGE%:%IMAGE_TAG%
-                """
+                sh '''
+                    trivy image --severity HIGH,CRITICAL --exit-code 1 \
+                    --format json -o trivy-report.json $DOCKER_IMAGE:$IMAGE_TAG
+                '''
             }
             post {
                 always {
@@ -134,7 +134,7 @@ pipeline {
 
         stage('Generate SBOM') {
             steps {
-                bat "trivy image --format cyclonedx -o sbom.json %DOCKER_IMAGE%:%IMAGE_TAG%"
+                sh 'trivy image --format cyclonedx -o sbom.json $DOCKER_IMAGE:$IMAGE_TAG'
             }
             post {
                 always {
@@ -145,16 +145,16 @@ pipeline {
 
         stage('Docker push') {
             steps {
-                bat "echo %DOCKERHUB_CREDENTIALS_PSW% | docker login -u %DOCKERHUB_CREDENTIALS_USR% --password-stdin"
-                bat "docker push %DOCKER_IMAGE%:%IMAGE_TAG%"
-                bat "docker push %DOCKER_IMAGE%:latest"
+                sh 'echo $DOCKERHUB_CREDENTIALS_PSW | docker login -u $DOCKERHUB_CREDENTIALS_USR --password-stdin'
+                sh 'docker push $DOCKER_IMAGE:$IMAGE_TAG'
+                sh 'docker push $DOCKER_IMAGE:latest'
             }
         }
     }
 
     post {
         always {
-            bat "docker logout || exit 0"
+            sh 'docker logout || true'
             cleanWs()
         }
     }
