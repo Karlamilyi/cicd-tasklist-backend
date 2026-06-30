@@ -57,12 +57,12 @@ pipeline {
         stage('SonarQube analysis') {
             steps {
                 withSonarQubeEnv('SonarQube') {
-                    sh '''
-                        sonar-scanner \
-                        -Dsonar.host.url=$SONAR_HOST_URL \
-                        -Dsonar.login=$SONAR_TOKEN \
+                    sh """
+                        npx sonarqube-scanner \
+                        -Dsonar.host.url=\$SONAR_HOST_URL \
+                        -Dsonar.login=\$SONAR_TOKEN \
                         -Dsonar.javascript.lcov.reportPaths=coverage/lcov.info
-                    '''
+                    """
                 }
             }
         }
