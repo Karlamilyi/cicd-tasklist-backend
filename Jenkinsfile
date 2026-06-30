@@ -69,39 +69,47 @@ pipeline {
         stage('Quality Gate') {
             steps {
                 script {
-                    def reportFile = '.scannerwork/report-task.txt'
-                    def props = readProperties file: reportFile
-                    def ceTaskUrl = props['ceTaskUrl']
-
                     timeout(time: 5, unit: 'MINUTES') {
+                        def ceTaskUrl = sh(
+                            script: "grep ceTaskUrl= .scannerwork/report-task.txt | cut -d'=' -f2-",
+                            returnStdout: true
+                        ).trim()
+
                         def taskStatus = ''
+                        def analysisId = ''
                         while (taskStatus != 'SUCCESS') {
                             def taskResponse = sh(
-                                script: "curl -s -u ${SONAR_TOKEN}: ${ceTaskUrl}",
+                                script: "curl -s -u ${SONAR_TOKEN}: '${ceTaskUrl}'",
                                 returnStdout: true
                             ).trim()
-                            def taskJson = readJSON text: taskResponse
-                            taskStatus = taskJson.task.status
+
+                            taskStatus = sh(
+                                script: "echo '${taskResponse}' | grep -o '\"status\":\"[A-Z]*\"' | head -1 | cut -d'\"' -f4",
+                                returnStdout: true
+                            ).trim()
 
                             if (taskStatus == 'FAILED' || taskStatus == 'CANCELED') {
                                 error "L'analyse SonarQube a échoué (status: ${taskStatus})"
                             }
                             if (taskStatus != 'SUCCESS') {
                                 sleep(time: 10, unit: 'SECONDS')
+                            } else {
+                                analysisId = sh(
+                                    script: "echo '${taskResponse}' | grep -o '\"analysisId\":\"[^\"]*\"' | cut -d'\"' -f4",
+                                    returnStdout: true
+                                ).trim()
                             }
                         }
 
-                        def analysisId = readJSON(text: sh(
-                            script: "curl -s -u ${SONAR_TOKEN}: ${ceTaskUrl}",
-                            returnStdout: true
-                        ).trim()).task.analysisId
-
                         def qgResponse = sh(
-                            script: "curl -s -u ${SONAR_TOKEN}: ${SONAR_HOST_URL}/api/qualitygates/project_status?analysisId=${analysisId}",
+                            script: "curl -s -u ${SONAR_TOKEN}: '${SONAR_HOST_URL}/api/qualitygates/project_status?analysisId=${analysisId}'",
                             returnStdout: true
                         ).trim()
-                        def qgJson = readJSON text: qgResponse
-                        def qgStatus = qgJson.projectStatus.status
+
+                        def qgStatus = sh(
+                            script: "echo '${qgResponse}' | grep -o '\"status\":\"[A-Z]*\"' | head -1 | cut -d'\"' -f4",
+                            returnStdout: true
+                        ).trim()
 
                         echo "Quality Gate status: ${qgStatus}"
                         if (qgStatus != 'OK') {
