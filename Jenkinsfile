@@ -136,7 +136,7 @@ pipeline {
                     echo "=== Génération du rapport JSON (archivage) ==="
                     trivy image --severity HIGH,CRITICAL --format json -o trivy-report.json $DOCKER_IMAGE:$IMAGE_TAG || true
 
-                    VULN_COUNT=$(grep -o '"Severity":"\\(HIGH\\|CRITICAL\\)"' trivy-report.json | wc -l)
+                    VULN_COUNT=$(grep -o '"Severity": *"\(HIGH\|CRITICAL\)"' trivy-report.json | wc -l)
                     echo "Nombre de vulnérabilités HIGH/CRITICAL : $VULN_COUNT"
                     echo "Pipeline poursuivie malgré les vulnérabilités détectées (blocage désactivé)."
                 '''
